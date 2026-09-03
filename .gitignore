@@ -1,0 +1,9 @@
+# Timesheet backups contain every employee name, every punch, and the admin
+# passcode hash. Never commit one -- especially to a public repository.
+timesheet-backup-*.json
+*.backup.json
+backups/
+
+# Local scratch
+.DS_Store
+Thumbs.db
