@@ -66,11 +66,84 @@ as anyone else, because employees have no passcode by design.
 This is the durable copy. Every clock in and clock out is uploaded to a Google
 Sheet as it happens. If the shop computer dies, the hours are still in the sheet.
 
-The sheet gets two tabs:
+The sheet gets three tabs.
 
-- **Shifts** -- one row per shift. Clocking in creates the row; clocking out
-  fills in the end time and the hours. This is the tab for payroll.
-- **Log** -- one line for every message received, never edited.
+### Timesheet -- the one you read
+
+Pay periods newest first, so the current one is always at the top. Each pay
+period is headed with its dates, the total hours across everyone, and the
+payday:
+
+    Pay period: 09/13/2026 – 09/26/2026        79.25    Payday 10/02/2026
+
+Under it, one line per employee showing their total for that period. Click the
+**+** in the grey margin on the left of an employee's row to open their days,
+and the **-** to fold them away again. They start folded:
+
+    Maria Delgado                              41.25    5 days worked
+      Sun 09/13/2026                            8.00    8:00 AM – 12:00 PM,  1:00 PM – 5:00 PM
+      Mon 09/14/2026                            8.50    8:00 AM – 4:30 PM
+
+One blank row separates employees, three blank rows separate pay periods.
+
+The columns are: the employee name or the date, then hours, then the payday /
+days worked / shift times depending on the row. Column A is left empty as a
+margin.
+
+Every number adds up: the day rows sum to the employee's total, and the
+employee totals sum to the period total. Each shift is rounded to two decimals
+once, and nothing above it is ever re-rounded, so checking a payslip with a
+calculator gives the same answer as the sheet.
+
+A day someone forgot to clock out of shows `9:00 AM – no clock-out` and counts
+as zero hours, and their summary line says so. A shift over 16 hours is marked
+with an asterisk.
+
+Only employees who actually worked in a period appear in that period's block.
+The script builds this tab from the Shifts tab and has no way of knowing about
+someone who was on the payroll but recorded nothing.
+
+**Do not type into this tab.** It is wiped and redrawn from Shifts every time
+somebody clocks in or out.
+
+### Shifts -- the raw feed
+
+One row per shift, keyed by punch id, which is what makes a retry after a
+dropped connection update the row instead of duplicating it. The Timesheet tab
+is rebuilt from this. Do not sort or edit it by hand.
+
+### Log -- every message received
+
+One line per message, never edited. Use it if you ever need to prove what was
+recorded and when.
+
+### When the Timesheet tab is redrawn
+
+- After every clock in and clock out, automatically.
+- Once at the end of a **Send All History** run, rather than once per punch.
+- When you pick **Timesheet -> Rebuild now** from the menu bar of the sheet
+  itself.
+- When you press **Rebuild Sheet Layout** on the admin page.
+
+### Changing the pay period
+
+At the top of `google-apps-script.gs`:
+
+    PERIOD_ANCHOR_YEAR / MONTH / DAY    any Sunday that started a real pay period
+    PERIOD_LENGTH_DAYS                  14
+    PAYDAY_OFFSET_DAYS                  6, the Friday after the closing Saturday
+    NEWEST_PERIOD_FIRST                 true
+    BLANK_ROWS_BETWEEN_EMPLOYEES        1
+    BLANK_ROWS_BETWEEN_PERIODS          3
+
+The anchor is currently Sunday 13 September 2026, which runs to Saturday 26
+September 2026 with payday on Friday 2 October 2026. Every other period is
+counted forwards and backwards from that one date in fourteen day steps, so
+changing the anchor shifts the whole calendar at once. Any Sunday that started
+a real pay period works; it does not have to be a recent one.
+
+After changing anything here, save, redeploy (see below), then run
+**Timesheet -> Rebuild now**.
 
 ### One-time setup
 
@@ -90,7 +163,8 @@ The sheet gets two tabs:
 9. In the timesheet: **Admin -> Google Sheets**, paste the address, name the
    device (for example "Front counter tablet"), and press **Save**.
 10. Press **Test Connection**. A line should appear on the Log tab of your sheet.
-11. Press **Send All History** once, to push anything already recorded.
+11. Press **Send All History** once, to push everything already recorded.
+12. Close and reopen the sheet once, so the **Timesheet** menu appears.
 
 ### After that
 
@@ -106,7 +180,14 @@ error.
 
 Changes do not take effect until you redeploy: **Deploy -> Manage deployments
 -> pencil icon -> Version: New version -> Deploy.** Editing and saving alone
-keeps the old code running.
+keeps the old code running, which is the usual reason a change appears to do
+nothing.
+
+### If you set the sheet up with an earlier version of this script
+
+The Shifts tab gained columns for the raw clock-in and clock-out times. Existing
+rows keep working, but press **Send All History** once so every row is filled in
+properly, then **Timesheet -> Rebuild now**.
 
 ### About that address
 

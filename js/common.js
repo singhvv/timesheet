@@ -44,6 +44,14 @@ var TS = (function () {
      7 hours 45 minutes is 7.75. */
   function fmtHours(ms) { return (ms / 3600000).toFixed(2); }
 
+  /* Every total is built by rounding each shift once and then adding the
+     rounded numbers, never by rounding a running total at the end. It is the
+     only way the parts on screen add up to the total next to them when
+     somebody checks a payslip with a calculator. */
+  function hoursOf(ms) { return Math.round((ms / 3600000) * 100) / 100; }
+  function addHours(a, b) { return Math.round((a + b) * 100) / 100; }
+  function showHours(hours) { return hours.toFixed(2); }
+
   /* Elapsed time of a punch. An open shift is measured up to now. */
   function punchMs(p, nowMs) {
     var end = p.outAt || (nowMs || Date.now());
@@ -166,7 +174,8 @@ var TS = (function () {
     LONG_SHIFT_HOURS: LONG_SHIFT_HOURS,
     pad: pad, esc: esc,
     fmtTime: fmtTime, fmtDate: fmtDate, fmtDateTime: fmtDateTime,
-    fmtHours: fmtHours, punchMs: punchMs, isLongShift: isLongShift,
+    fmtHours: fmtHours, hoursOf: hoursOf, addHours: addHours, showHours: showHours,
+    punchMs: punchMs, isLongShift: isLongShift,
     dayKey: dayKey, inputValue: inputValue,
     parseDateParts: parseDateParts,
     startOfDay: startOfDay, endOfDay: endOfDay, addDays: addDays,

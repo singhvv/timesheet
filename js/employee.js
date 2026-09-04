@@ -47,9 +47,9 @@
       var thisWeek = 0, lastWeek = 0;
       punches.forEach(function (p) {
         if (!p.outAt) return;                       // open shifts are not counted yet
-        var ms = TS.punchMs(p);
-        if (p.inAt >= weekStart) thisWeek += ms;
-        else if (p.inAt >= lastWeekStart) lastWeek += ms;
+        var hours = TS.hoursOf(TS.punchMs(p));
+        if (p.inAt >= weekStart) thisWeek = TS.addHours(thisWeek, hours);
+        else if (p.inAt >= lastWeekStart) lastWeek = TS.addHours(lastWeek, hours);
       });
 
       var recent = punches.filter(function (p) { return p.inAt >= recentStart; })
@@ -59,7 +59,7 @@
     });
   }
 
-  function draw(thisWeekMs, lastWeekMs, recent) {
+  function draw(thisWeekHours, lastWeekHours, recent) {
     var html = '';
 
     /* ---- status and the one big button ---- */
@@ -95,9 +95,9 @@
 
     html += '<div class="totals">' +
               '<div class="total-box"><div class="k">This Week</div><div class="v">' +
-                TS.fmtHours(thisWeekMs) + '</div></div>' +
+                TS.showHours(thisWeekHours) + '</div></div>' +
               '<div class="total-box"><div class="k">Last Week</div><div class="v">' +
-                TS.fmtHours(lastWeekMs) + '</div></div>' +
+                TS.showHours(lastWeekHours) + '</div></div>' +
             '</div>';
 
     html += '<div class="spacer"></div>';
@@ -114,7 +114,7 @@
       var rows = '';
       recent.forEach(function (p) {
         var openRow = !p.outAt;
-        if (!openRow) total += TS.punchMs(p);
+        if (!openRow) total = TS.addHours(total, TS.hoursOf(TS.punchMs(p)));
         rows += '<tr>' +
                   '<td>' + TS.esc(TS.fmtDate(p.inAt)) + '</td>' +
                   '<td>' + TS.esc(TS.fmtTime(p.inAt)) + '</td>' +
@@ -132,7 +132,7 @@
                 '<th class="num">Hours</th></tr></thead>' +
                 '<tbody>' + rows + '</tbody>' +
                 '<tfoot><tr><td colspan="3">Total</td><td class="num">' +
-                  TS.fmtHours(total) + '</td></tr></tfoot>' +
+                  TS.showHours(total) + '</td></tr></tfoot>' +
               '</table></div>' +
               '<p class="hint">Hours are shown in decimal form. 7 hours 45 minutes reads as 7.75.</p>';
     }

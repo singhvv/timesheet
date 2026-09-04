@@ -101,9 +101,13 @@ var Sync = (function () {
 
   /* One row per punch, keyed by the punch id so a retry overwrites rather
      than duplicating. Clock-in writes the row; clock-out fills in the rest. */
-  function rowFor(punch, employeeName) {
+  function rowFor(punch, employeeName, bulk) {
     var hours = punch.outAt ? (punch.outAt - punch.inAt) / 3600000 : 0;
     return {
+      /* A bulk row tells the script to skip rebuilding the Timesheet tab.
+         Rebuilding it once per row would turn a history re-send into
+         hundreds of full sheet rewrites. One rebuild is sent at the end. */
+      bulk: bulk ? true : undefined,
       punchId: punch.id,
       employeeId: punch.employeeId,
       employeeName: employeeName || '',
@@ -236,9 +240,21 @@ var Sync = (function () {
     ]).then(function (results) {
       var names = {};
       results[0].forEach(function (e) { names[e.id] = e.name; });
-      results[1].forEach(function (p) { enqueueRow(rowFor(p, names[p.employeeId])); });
+      results[1].forEach(function (p) { enqueueRow(rowFor(p, names[p.employeeId], true)); });
       return flush();
+    }).then(function (result) {
+      /* Best effort: if this does not get through, the next punch rebuilds
+         the sheet anyway, and there is a Rebuild now item on the sheet's
+         own Timesheet menu. */
+      return requestRebuild().then(function () { return result; },
+                                   function () { return result; });
     });
+  }
+
+  /* Asks the script to redraw the Timesheet tab from the Shifts tab. */
+  function requestRebuild() {
+    if (!isConfigured()) return Promise.reject(new Error('Not connected.'));
+    return postRow(settings().url, { action: 'rebuild', sentAt: Date.now() });
   }
 
   function test() {
@@ -299,6 +315,7 @@ var Sync = (function () {
     onPunchChanged: onPunchChanged,
     flush: flush,
     sendAllHistory: sendAllHistory,
+    requestRebuild: requestRebuild,
     test: test,
     status: status,
     save: save,

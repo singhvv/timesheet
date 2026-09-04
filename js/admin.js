@@ -272,6 +272,7 @@
           '<button class="btn" id="syncTest">Test Connection</button>' +
           '<button class="btn" id="syncNow">Send Waiting Punches</button>' +
           '<button class="btn" id="syncAll">Send All History</button>' +
+          '<button class="btn" id="syncRebuild">Rebuild Sheet Layout</button>' +
         '</div>' +
         '<p class="hint">Setting this up is described in README.md under ' +
         '&ldquo;Sending the hours to Google Sheets&rdquo;. The address is stored on this ' +
@@ -332,6 +333,7 @@
     TS.el('#syncTest').addEventListener('click', testSync);
     TS.el('#syncNow').addEventListener('click', flushSync);
     TS.el('#syncAll').addEventListener('click', sendAllHistory);
+    TS.el('#syncRebuild').addEventListener('click', rebuildSheet);
 
     drawEmployeeList();
     drawRecoveryState();
@@ -519,41 +521,40 @@
       return;
     }
 
-    var grandMs = 0, openCount = 0, longCount = 0;
+    var grandHours = 0, openCount = 0, longCount = 0;
     var bodyRows = '';
 
     listed.forEach(function (emp) {
       var mine = byEmployee[emp.id] || [];
-      var totalMs = 0;
+      var totalHours = 0;
       var days = {};
 
       mine.forEach(function (p) {
         var key = TS.dayKey(p.inAt);
-        var day = days[key] || (days[key] = { key: key, at: p.inAt, ms: 0, punches: [] });
+        var day = days[key] || (days[key] = { key: key, at: p.inAt, hours: 0, punches: [] });
         day.punches.push(p);
         if (p.outAt) {
-          var ms = TS.punchMs(p);
-          day.ms += ms;
-          totalMs += ms;
+          day.hours = TS.addHours(day.hours, TS.hoursOf(TS.punchMs(p)));
           if (TS.isLongShift(p)) longCount++;
         } else {
           openCount++;
         }
       });
 
-      grandMs += totalMs;
-
       var dayList = Object.keys(days).map(function (k) { return days[k]; })
                     .sort(function (a, b) { return a.at - b.at; });
 
-      var worked = dayList.filter(function (d) { return d.ms > 0; }).length;
+      dayList.forEach(function (d) { totalHours = TS.addHours(totalHours, d.hours); });
+      grandHours = TS.addHours(grandHours, totalHours);
+
+      var worked = dayList.filter(function (d) { return d.hours > 0; }).length;
 
       bodyRows +=
         '<tr>' +
           '<td>' + TS.esc(emp.name) +
             (emp.active ? '' : ' <span class="muted">(archived)</span>') + '</td>' +
           '<td class="num">' + worked + '</td>' +
-          '<td class="num">' + TS.fmtHours(totalMs) + '</td>' +
+          '<td class="num">' + TS.showHours(totalHours) + '</td>' +
           '<td>' + (dayList.length
               ? '<button class="btn btn-small" data-days="' + TS.esc(emp.id) + '">Show days</button>'
               : '<span class="muted">&ndash;</span>') + '</td>' +
@@ -584,7 +585,7 @@
       '<p class="runstamp">' +
         TS.esc(TS.fmtDate(fromMs)) + ' through ' + TS.esc(TS.fmtDate(toMs)) +
         ' &nbsp;&middot;&nbsp; ' + listed.length + ' employee' + (listed.length === 1 ? '' : 's') +
-        ' &nbsp;&middot;&nbsp; ' + TS.fmtHours(grandMs) + ' hours' +
+        ' &nbsp;&middot;&nbsp; ' + TS.showHours(grandHours) + ' hours' +
         (announce ? ' &nbsp;&middot;&nbsp; run at ' + TS.esc(TS.fmtTime(Date.now())) : '') +
       '</p>';
 
@@ -595,7 +596,7 @@
         '<th class="num">Total Hours</th><th>Detail</th></tr></thead>' +
         '<tbody>' + bodyRows + '</tbody>' +
         '<tfoot><tr><td colspan="2">All employees</td>' +
-        '<td class="num">' + TS.fmtHours(grandMs) + '</td><td></td></tr></tfoot>' +
+        '<td class="num">' + TS.showHours(grandHours) + '</td><td></td></tr></tfoot>' +
       '</table></div>';
 
     TS.els('#report [data-days]').forEach(function (button) {
@@ -623,7 +624,7 @@
       return '<tr>' +
                '<td>' + TS.esc(TS.fmtDate(day.at)) + '</td>' +
                '<td>' + shifts + '</td>' +
-               '<td class="num">' + TS.fmtHours(day.ms) + '</td>' +
+               '<td class="num">' + TS.showHours(day.hours) + '</td>' +
              '</tr>';
     }).join('');
 
@@ -746,6 +747,25 @@
       }
       button.disabled = false;
       button.textContent = 'Send All History';
+      drawSyncPanel();
+    });
+  }
+
+  /* Redraws the Timesheet tab from the raw Shifts tab. Normally automatic
+     after every punch; this is for when the sheet has been fiddled with. */
+  function rebuildSheet() {
+    TS.clearMsg();
+    var button = TS.el('#syncRebuild');
+    button.disabled = true;
+    button.textContent = 'Rebuilding...';
+
+    Sync.requestRebuild().then(function () {
+      TS.showOk('The Timesheet tab has been rebuilt.');
+    }).catch(function (err) {
+      TS.showError('Could not rebuild: ' + err.message);
+    }).then(function () {
+      button.disabled = false;
+      button.textContent = 'Rebuild Sheet Layout';
       drawSyncPanel();
     });
   }
