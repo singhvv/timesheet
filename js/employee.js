@@ -176,5 +176,6 @@
   }
 
   TS.startTopClock();
+  if (typeof Sync !== 'undefined') Sync.startRetryLoop();
   load();
 })();

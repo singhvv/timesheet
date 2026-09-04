@@ -12,10 +12,11 @@
 
    Shape of the saved data:
      {
-       version:   1,
-       employees: [ { id, name, active, createdAt } ],
-       punches:   [ { id, employeeId, inAt, outAt } ],   // ms since epoch
-       adminPass: { algo, hash } | null
+       version:       1,
+       employees:     [ { id, name, active, createdAt } ],
+       punches:       [ { id, employeeId, inAt, outAt } ],   // ms since epoch
+       adminPass:     { algo, hash } | null,
+       adminRecovery: { algo, hash } | null
      }
    An open shift (clocked in, not yet out) has outAt === null.
    ============================================================ */
@@ -24,7 +25,13 @@ var Store = (function () {
   var KEY = 'timesheet.v1';
 
   function blankData() {
-    return { version: 1, employees: [], punches: [], adminPass: null };
+    return {
+      version: 1,
+      employees: [],
+      punches: [],
+      adminPass: null,
+      adminRecovery: null
+    };
   }
 
   function load() {
@@ -38,7 +45,21 @@ var Store = (function () {
     if (!Array.isArray(data.employees)) data.employees = [];
     if (!Array.isArray(data.punches)) data.punches = [];
     if (data.adminPass === undefined) data.adminPass = null;
+    if (data.adminRecovery === undefined) data.adminRecovery = null;
     return data;
+  }
+
+  /* Every punch that is created or closed goes through here so the Google
+     Sheets uploader sees all of them. sync.js is optional -- if it is not
+     loaded on this page the timesheet carries on working exactly as before. */
+  function announce(punch) {
+    if (window.Sync && typeof window.Sync.onPunchChanged === 'function') {
+      try {
+        window.Sync.onPunchChanged(punch);
+      } catch (e) {
+        /* An upload problem must never stop somebody clocking in. */
+      }
+    }
   }
 
   function save(data) {
@@ -120,12 +141,14 @@ var Store = (function () {
       var data = load();
       var emp = data.employees.filter(function (e) { return e.id === id; })[0];
       if (!emp) return fail('That employee no longer exists.');
+      var closed = null;
       if (archived) {
-        var open = findOpen(data, id);
-        if (open) open.outAt = Date.now();   // never leave a shift hanging
+        closed = findOpen(data, id);
+        if (closed) closed.outAt = Date.now();   // never leave a shift hanging
       }
       emp.active = !archived;
       save(data);
+      if (closed) announce(closed);
       return ok(emp);
     },
 
@@ -141,6 +164,7 @@ var Store = (function () {
       var punch = { id: newId(), employeeId: employeeId, inAt: Date.now(), outAt: null };
       data.punches.push(punch);
       save(data);
+      announce(punch);
       return ok(punch);
     },
 
@@ -150,6 +174,7 @@ var Store = (function () {
       if (!open) return fail('That employee is not clocked in.');
       open.outAt = Date.now();
       save(data);
+      announce(open);
       return ok(open);
     },
 
@@ -178,6 +203,15 @@ var Store = (function () {
       return ok(true);
     },
 
+    getAdminRecovery: function () { return ok(load().adminRecovery); },
+
+    setAdminRecovery: function (record) {
+      var data = load();
+      data.adminRecovery = record;
+      save(data);
+      return ok(true);
+    },
+
     /* ---------- backup ---------- */
 
     exportAll: function () { return ok(load()); },
@@ -191,6 +225,7 @@ var Store = (function () {
       data.employees = incoming.employees;
       data.punches = incoming.punches;
       data.adminPass = incoming.adminPass || null;
+      data.adminRecovery = incoming.adminRecovery || null;
       save(data);
       return ok(true);
     }

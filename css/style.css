@@ -347,3 +347,56 @@ tfoot td {
 
 /* Keep wide tables from breaking the page on a tablet. */
 .table-scroll { overflow-x: auto; }
+
+/* ---------- report run stamp ---------- */
+
+.runstamp {
+  margin: 0 0 10px;
+  padding: 6px 9px;
+  font-size: 12px;
+  color: #33475a;
+  background: #eef1f3;
+  border: 1px solid #c4c4c4;
+}
+
+/* ---------- recovery code ---------- */
+
+.codebox {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 26px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  text-align: center;
+  padding: 18px 10px;
+  border: 2px solid #2b4257;
+  background: #f7f9fa;
+  margin: 14px 0;
+  word-break: break-all;
+}
+
+.codebox-small {
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: 0;
+  text-align: left;
+  padding: 10px;
+  border-width: 1px;
+}
+
+/* ---------- sync notice on the home page ---------- */
+
+.syncline {
+  border: 1px solid #b9b9b9;
+  border-left: 5px solid #b07a12;
+  background: #fdf6e6;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+/* Printing the recovery code should not waste a page on the header bar. */
+@media print {
+  .topbar, .btn, label { display: none !important; }
+  body { background: #ffffff; }
+  .panel { border-color: #000000; }
+}

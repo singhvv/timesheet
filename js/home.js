@@ -4,7 +4,26 @@
 
 (function () {
 
+  /* If the Google Sheet is connected but punches are stuck in the queue,
+     say so where somebody will actually see it. */
+  function renderSyncLine() {
+    var target = TS.el('#syncLine');
+    if (!target || typeof Sync === 'undefined') return;
+
+    var s = Sync.status();
+    if (!s.configured || !s.pending) {
+      target.style.display = 'none';
+      return;
+    }
+
+    target.style.display = '';
+    target.textContent = s.pending + ' punch' + (s.pending === 1 ? '' : 'es') +
+      ' still waiting to reach Google Sheets. They are saved here and will upload ' +
+      'once this device is back online.';
+  }
+
   function render() {
+    renderSyncLine();
     Store.listEmployees(false).then(function (employees) {
       var list = TS.el('#list');
 
@@ -39,6 +58,7 @@
   }
 
   TS.startTopClock();
+  if (typeof Sync !== 'undefined') Sync.startRetryLoop();
   render();
 
   /* Refresh the badges every half minute, and immediately if another

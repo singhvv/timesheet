@@ -64,14 +64,39 @@ var TS = (function () {
 
   function inputValue(ms) { return dayKey(ms); }   // for <input type="date">
 
+  /* A date field normally hands back '2026-09-02'. An older browser with no
+     date picker hands back whatever was typed, so accept '09/02/2026' too.
+     Anything we cannot make sense of returns null rather than a silent
+     Invalid Date that would poison every comparison downstream. */
+  function parseDateParts(dateStr) {
+    var text = String(dateStr === null || dateStr === undefined ? '' : dateStr).trim();
+    if (!text) return null;
+
+    var iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
+    var us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
+
+    var y, m, d;
+    if (iso) { y = +iso[1]; m = +iso[2]; d = +iso[3]; }
+    else if (us) { y = +us[3]; m = +us[1]; d = +us[2]; }
+    else return null;
+
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+
+    var probe = new Date(y, m - 1, d, 0, 0, 0, 0);
+    if (probe.getFullYear() !== y || probe.getMonth() !== m - 1 || probe.getDate() !== d) {
+      return null;                  // rejects 02/31 and friends
+    }
+    return { y: y, m: m, d: d };
+  }
+
   function startOfDay(dateStr) {    // '2026-09-02' -> ms at 00:00:00.000
-    var bits = String(dateStr).split('-');
-    return new Date(+bits[0], +bits[1] - 1, +bits[2], 0, 0, 0, 0).getTime();
+    var p = parseDateParts(dateStr);
+    return p === null ? null : new Date(p.y, p.m - 1, p.d, 0, 0, 0, 0).getTime();
   }
 
   function endOfDay(dateStr) {      // '2026-09-02' -> ms at 23:59:59.999
-    var bits = String(dateStr).split('-');
-    return new Date(+bits[0], +bits[1] - 1, +bits[2], 23, 59, 59, 999).getTime();
+    var p = parseDateParts(dateStr);
+    return p === null ? null : new Date(p.y, p.m - 1, p.d, 23, 59, 59, 999).getTime();
   }
 
   function addDays(ms, n) {
@@ -143,6 +168,7 @@ var TS = (function () {
     fmtTime: fmtTime, fmtDate: fmtDate, fmtDateTime: fmtDateTime,
     fmtHours: fmtHours, punchMs: punchMs, isLongShift: isLongShift,
     dayKey: dayKey, inputValue: inputValue,
+    parseDateParts: parseDateParts,
     startOfDay: startOfDay, endOfDay: endOfDay, addDays: addDays,
     startOfWeek: startOfWeek, startOfMonth: startOfMonth,
     el: el, els: els, param: param,
@@ -219,8 +245,38 @@ var Auth = (function () {
     try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
   }
 
+  /* Recovery code, for the day somebody forgets the passcode. Letters and
+     digits that cannot be mistaken for each other -- no O/0, no I/1/L. */
+  var CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+  function newRecoveryCode() {
+    var length = 16;
+    var picks = new Array(length);
+    var i;
+
+    if (window.crypto && window.crypto.getRandomValues) {
+      var bytes = new Uint8Array(length);
+      window.crypto.getRandomValues(bytes);
+      for (i = 0; i < length; i++) picks[i] = CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+    } else {
+      for (i = 0; i < length; i++) {
+        picks[i] = CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+      }
+    }
+
+    /* Grouped as ABCD-EFGH-JKMN-PQRS so it can be read off paper. */
+    return picks.join('').replace(/(.{4})(?=.)/g, '$1-');
+  }
+
+  /* Accept the code however it gets typed back in: lower case, spaces,
+     missing dashes. */
+  function normalizeCode(text) {
+    return String(text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
   return {
     makeRecord: makeRecord, verify: verify,
+    newRecoveryCode: newRecoveryCode, normalizeCode: normalizeCode,
     isSignedIn: isSignedIn, signIn: signIn, signOut: signOut
   };
 })();
